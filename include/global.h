@@ -16,8 +16,16 @@ extern volatile double setpoint;
 extern volatile double posicion_actual;
 extern volatile int32_t duty_global; // 32 bits para evitar overflow antes del cast
 extern volatile bool b_PID;
-extern bool b_control_pot; // Bandera para habilitar control por potenciómetro
-extern bool b_space_states_controlled; // Bandera para control por espacio de estados
+extern volatile bool b_space_states_controlled; // Bandera para control por espacio de estados
+extern volatile bool b_windup;
+extern volatile bool b_control_pot; // Bandera para habilitar control por potenciómetro
+
+
+// Variables de Espacio de Estados
+extern double k_x1; // Ganancia de Posición
+extern double k_x2; // Ganancia de Velocidad
+extern double k0;   // Ganancia de Pre-compensación (Nbar)
+
 
 //Banderas y variables no críticas
 extern bool b_logging; // Bandera para activar/desactivar logging

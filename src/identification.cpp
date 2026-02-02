@@ -1,12 +1,13 @@
 #include "identification.h"
 #include "global.h"
 #include "config.h"
+#include "PID_Task.h"
 
 
 void runIdentificationStep() {
     if (!b_identification) return;
 
-    float duty = 0.0;
+    float duty_percent = 0.0;
     float max_duty_percent = 90.0; // Máximo duty cycle en porcentaje
     
     // Definimos la duración de cada "pata" del triángulo en ticks del contador
@@ -17,48 +18,37 @@ void runIdentificationStep() {
     
     // PRIMERA ETAPA: SENTIDO ANTIHORARIO (0 a 600 ticks)
     if (iden_counter < t_cambio) {
-        digitalWrite(SENTIDO_HORARIO, LOW);
-        digitalWrite(SENTIDO_ANTIHORARIO, HIGH);
 
         if (iden_counter < t_subida) {
             // Rampa de subida (0% a max%)
             // Ecuación lineal: y = (x / x_max) * y_max
-            duty = ((float)iden_counter / (float)t_subida) * max_duty_percent;
+            duty_percent = ((float)iden_counter / (float)t_subida) * max_duty_percent;
         } else {
             // Rampa de bajada (max% a 0%)
             // Ecuación: mapeamos de t_subida->t_bajada a max->0
             float pasos_en_bajada = iden_counter - t_subida;
             float duracion_bajada = t_bajada - t_subida;
-            duty = max_duty_percent * (1.0 - (pasos_en_bajada / duracion_bajada));
+            duty_percent = max_duty_percent * (1.0 - (pasos_en_bajada / duracion_bajada));
         }
         
-        // Actualizamos duty global positivo para indicar Antihorario
-        duty_global = (int32_t)duty; 
-
     // SEGUNDA ETAPA: SENTIDO HORARIO (600 a 1200 ticks)
     } else if (iden_counter >= t_cambio && iden_counter < (t_cambio * 2)) {
-        digitalWrite(SENTIDO_HORARIO, HIGH);
-        digitalWrite(SENTIDO_ANTIHORARIO, LOW);
 
         int local_counter = iden_counter - t_cambio; // Reiniciamos contador virtual para esta etapa
 
         if (local_counter < t_subida) {
             // Rampa subida
-            duty = ((float)local_counter / (float)t_subida) * max_duty_percent;
+            duty_percent = ((float)local_counter / (float)t_subida) * max_duty_percent;
         } else {
             // Rampa bajada
             float pasos_en_bajada = local_counter - t_subida;
             float duracion_bajada = t_bajada - t_subida;
-            duty = max_duty_percent * (1.0 - (pasos_en_bajada / duracion_bajada));
+            duty_percent = -max_duty_percent * (1.0 - (pasos_en_bajada / duracion_bajada));
         }
-
-        // Actualizamos duty global
-        duty_global = (int32_t)duty* 65535 / 100; // Escalamos a 16 bits
 
     // FINALIZACIÓN
     } else {
-        digitalWrite(SENTIDO_HORARIO, LOW);
-        digitalWrite(SENTIDO_ANTIHORARIO, LOW);
+
         if(pwm) pwm->setPWM(PWM_PIN, FRECUENCIA, 0);
         
         duty_global = 0;
@@ -68,21 +58,13 @@ void runIdentificationStep() {
         Serial.println("FIN IDENTIFICACION");
         return; 
     }
-    // Saturación de duty
-    if (duty > 100.0) duty = 100.0;
 
-    // Mapeo de Porcentaje (0-100) a 16 bits (0-65535)
-    // Usamos float para no perder precisión en la división
-    uint32_t raw_pwm = (uint32_t)((duty / 100.0) * 65535.0); 
-
-    // Saturación de seguridad para 16 bits
-    if (raw_pwm > 65535) raw_pwm = 65535;
-
-    // Escribir al PWM
-    if(pwm) pwm->setPWM_Int(PWM_PIN, FRECUENCIA, raw_pwm);
-    //if(pwm) pwm->setPWM(PWM_PIN, FRECUENCIA, duty);
+    double u_volts = (duty_percent / 100.0) * V_PID_MAX;
+    
+    writeMotorOutput(u_volts);
 
     iden_counter++;
+
 }
 
 

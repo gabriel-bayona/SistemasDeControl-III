@@ -12,12 +12,18 @@ volatile double setpoint = 0.0;
 volatile double posicion_actual = 0.0;
 volatile int32_t duty_global = 0;
 volatile bool b_PID = false;
+volatile bool b_windup = true;
 bool b_logging = false; // Inicializada en falso para no loggear hasta que se pida
 volatile bool b_identification = false; //idem arriba
 volatile bool b_identification2 = false; //idem arriba
 volatile int iden_counter = 0;
-bool b_control_pot = false; // Inicializado en falso por seguridad
+volatile bool b_control_pot = false; // Inicializado en falso por seguridad
 
+// Variables de Espacio de Estados
+volatile bool b_space_states_controlled = false; // Inicializado en falso. "false": PID clásico ; "true": Espacio de Estados
+double k_x1 = 100.0; 
+double k_x2 = 5.0;   
+double k0 = 100.0;
 
 
 void initPeripherals() {
