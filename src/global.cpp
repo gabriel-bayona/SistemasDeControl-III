@@ -10,13 +10,14 @@ TaskHandle_t TaskPID_Handle; // Handle de la tarea PID
 volatile double kp = 4.5, ki = 0.6, kd = 0.0; // esto va a depender del sistema, lo dejo así para pruebas
 volatile double setpoint = 0.0;
 volatile double posicion_actual = 0.0;
-volatile int32_t duty_global = 0;
+volatile int32_t duty_applied = 0;
 volatile bool b_PID = false;
 volatile bool b_windup = true;
 bool b_logging = false; // Inicializada en falso para no loggear hasta que se pida
 volatile bool b_identification = false; //idem arriba
 volatile bool b_identification2 = false; //idem arriba
-volatile int iden_counter = 0;
+volatile iden_mode_t g_iden_mode = IDEN_NONE;
+volatile uint32_t iden_counter = 0; // Contador de muestras de identificación
 volatile bool b_control_pot = false; // Inicializado en falso por seguridad
 
 // Variables de Espacio de Estados

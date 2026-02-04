@@ -3,7 +3,7 @@
 #include "global.h"
 #include "identification.h"
 
-static const double Ts = 0.01;   // Periodo de muestreo: 10 ms
+static const double Ts = TS_SEC;   // Periodo de muestreo: 20 ms
 
 
 double getSetpoint(double current_sp) {
@@ -15,7 +15,6 @@ double getSetpoint(double current_sp) {
     }
     return current_sp;
 }
-
 
 void velocityFilterInit(VelocityFilter *f) {
     for (int i = 0; i < 5; i++) f->buffer[i] = 0;
@@ -51,7 +50,6 @@ void pidReset(PIDController *pid) {
     pid->prev_output = 0;
     pid->prev_error = 0;
 }
-
 
 double pidDigitalUpdate(PIDController *pid, double setpoint, long current_counts, VelocityFilter *f) {
     
@@ -99,7 +97,6 @@ double pidDigitalUpdate(PIDController *pid, double setpoint, long current_counts
     return uT;
 }
 
-
 double pidClassicUpdate(PIDController *pid, double error) {
     // Término Proporcional
     double kp_aux = pid->kp * error;
@@ -134,20 +131,24 @@ void writeMotorOutput(double u_volts) {
     long long duty = (long long)((u_volts / V_PID_MAX) * 65535.0);
 
     // Control de Dirección (Puente H)
-    if (duty >= 0) {
+    if (duty > 0) {
         digitalWrite(SENTIDO_HORARIO, HIGH);
         digitalWrite(SENTIDO_ANTIHORARIO, LOW);
-    } else {
+    } else if (duty < 0) {
         digitalWrite(SENTIDO_HORARIO, LOW);
         digitalWrite(SENTIDO_ANTIHORARIO, HIGH);
         duty = -duty; // Tomar valor absoluto para el PWM
+    }else {
+        // Si duty es 0, apagar ambos sentidos, motor libre
+        digitalWrite(SENTIDO_HORARIO, LOW);
+        digitalWrite(SENTIDO_ANTIHORARIO, LOW);
     }
 
     // Saturación final del contador PWM
     if (duty > max_duty) duty = max_duty;
 
-    duty_global = (int16_t)duty; // Variable global para debug
-    pwm->setPWM_Int(PWM_PIN, FRECUENCIA, duty_global);
+    duty_applied = (int16_t)duty; // Variable global para debug
+    pwm->setPWM_Int(PWM_PIN, FRECUENCIA, duty_applied);
 }
 
 
@@ -156,6 +157,9 @@ void TaskPIDCode(void *pvParameters) {
     // Inicialización de estructuras locales
     PIDController pid;
     pidInit(&pid, kp, ki, kd);
+
+    // Configuración del tiempo de la tarea, para mantener periodo constante
+    TickType_t lastWakeTime = xTaskGetTickCount();
 
     // Filtro A: Para Espacio de Estados (Velocidad normalizada)
     VelocityFilter vel_filter_ss;
@@ -196,12 +200,8 @@ void TaskPIDCode(void *pvParameters) {
             double u = (k0 * setpoint) - (k_x1 * posicion_actual) - (k_x2 * vel_x2);
             
             writeMotorOutput(u);
-        }
-        else if (b_identification) {
-            runIdentificationStep();
-        }
-        else if (b_identification2) {
-            runIdentificationStep2();
+        }else if (g_iden_mode != IDEN_NONE) {
+            runIdentification();
         }
         else {
             writeMotorOutput(0);
@@ -215,6 +215,7 @@ void TaskPIDCode(void *pvParameters) {
             velocityFilterInit(&vel_filter_digital);
         }
 
-        vTaskDelay(pdMS_TO_TICKS(10));
+        //vTaskDelay(pdMS_TO_TICKS(TS_TICKS)); // Alternativa menos precisa, porque espera un tiempo fijo LUEGO de terminar la tarea. T_real = T_cálculo + TS_TICKS
+        vTaskDelayUntil(&lastWakeTime, pdMS_TO_TICKS(TS_TICKS)); // Mantener periodo constante de 10 ms, sin importar el tiempo de ejecución de la tarea. T_real = TS_TICKS
     }
 }

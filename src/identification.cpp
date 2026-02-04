@@ -3,18 +3,23 @@
 #include "config.h"
 #include "PID_Task.h"
 
+// Funciones internas (archivo-local)
+static void runIdentificationRamp();
+static void runIdentificationStep();
 
-void runIdentificationStep() {
-    if (!b_identification) return;
+
+static void runIdentificationRamp() {
+    if (g_iden_mode != IDEN_RAMP) return;
 
     float duty_percent = 0.0;
     float max_duty_percent = 90.0; // Máximo duty cycle en porcentaje
     
-    // Definimos la duración de cada "pata" del triángulo en ticks del contador
-    // Ejemplo: 0 a 300 sube, 300 a 600 baja.
-    int t_subida = 300; 
-    int t_bajada = 600;  // Punto donde termina la bajada (300 de subida + 300 de bajada)
-    int t_cambio = 600;  // Punto donde cambiamos de sentido
+    // Definimos la duración de cada "diente" del triángulo en ticks del contador
+    // Ejemplo: 0 ms a 300 ms sube, 300 ms a 600 ms baja.
+
+    uint32_t t_subida  = IDEN_RAMP_SAMPLES;
+    uint32_t t_bajada  = 2 * IDEN_RAMP_SAMPLES; // Punto donde termina la bajada (Ej si IDEN_RAMP_SAMPLES = 3 [s], 300 [ms] de subida + 300 [ms] de bajada)
+    uint32_t t_cambio  = 2 * IDEN_RAMP_SAMPLES; // Punto donde cambiamos de sentido
     
     // PRIMERA ETAPA: SENTIDO ANTIHORARIO (0 a 600 ticks)
     if (iden_counter < t_cambio) {
@@ -51,8 +56,8 @@ void runIdentificationStep() {
 
         if(pwm) pwm->setPWM(PWM_PIN, FRECUENCIA, 0);
         
-        duty_global = 0;
-        b_identification = false;
+        duty_applied = 0;
+        g_iden_mode = IDEN_NONE; // Salimos del modo identificación
         b_logging = false; 
         iden_counter = 0; // Reseteamos para la próxima vez
         Serial.println("FIN IDENTIFICACION");
@@ -68,61 +73,59 @@ void runIdentificationStep() {
 }
 
 
-void runIdentificationStep2() {
-    if (!b_identification2) return;
-
-    float duty = 0.0;
-    float max_duty_percent = 90.0; // Máximo duty cycle en porcentaje
-    
-    // Definimos la duración de cada escalón en ticks del contador
-    int step_duration = 200; // Duración de cada escalón en ticks
-    int total_steps = 6;     // Total de escalones (3 positivos, 3 negativos)
-    
-    int current_step = iden_counter / step_duration;
-    
-    if (current_step < total_steps) {
-        if (current_step % 2 == 0) {
-            // Escalón positivo (Sentido Antihorario)
-            digitalWrite(SENTIDO_HORARIO, LOW);
-            digitalWrite(SENTIDO_ANTIHORARIO, HIGH);
-            duty = max_duty_percent;
-        } else {
-            // Escalón negativo (Sentido Horario)
-            digitalWrite(SENTIDO_HORARIO, HIGH);
-            digitalWrite(SENTIDO_ANTIHORARIO, LOW);
-            duty = max_duty_percent;
-        }
-
-        // Actualizamos duty global
-        duty_global = (int32_t)duty * 65535 / 100; // Escalamos a 16 bits
-
-    } else {
-        digitalWrite(SENTIDO_HORARIO, LOW);
-        digitalWrite(SENTIDO_ANTIHORARIO, LOW);
-        if(pwm) pwm->setPWM(PWM_PIN, FRECUENCIA, 0);
+static void runIdentificationStep() {
+    if (g_iden_mode != IDEN_STEP) return;
         
-        duty_global = 0;
-        b_identification2 = false;
-        b_logging = false; 
-        iden_counter = 0; // Reseteamos para la próxima vez
+    uint32_t current_step = iden_counter / IDEN2_STEP_SAMPLES;
+
+    if (current_step >= IDEN2_TOTAL_STEPS) {
+
+        writeMotorOutput(0.0);
+
+        g_iden_mode = IDEN_NONE; // Salimos del modo identificación
+        b_logging = false;
+        iden_counter = 0;
+
         Serial.println("FIN IDENTIFICACION 2");
-        return; 
+        return;
     }
 
-    // Mapeo de Porcentaje (0-100) a 16 bits (0-65535)
-    uint32_t raw_pwm = (uint32_t)((duty / 100.0) * 65535.0); 
+    // Alternar signo: + - + - ..., hace que los escalones sean positivos y negativos, cambia el sentido del motor
+    double sign = (current_step % 2 == 0) ? 1.0 : -1.0;
 
-    // Saturación de seguridad para 16 bits
-    if (raw_pwm > 65535) raw_pwm = 65535;
+    // Aplicar el escalón correspondiente, alternando el signo
+    double u_volts = sign * (IDEN2_MAX_DUTY_PCT / 100.0) * V_PID_MAX;
 
-    // Escribir al PWM
-    if(pwm) pwm->setPWM_Int(PWM_PIN, FRECUENCIA, raw_pwm);
+    writeMotorOutput(u_volts);
 
     iden_counter++;
 }
 
+
+void runIdentification()
+{
+    switch (g_iden_mode) {
+
+        case IDEN_RAMP:
+            runIdentificationRamp();
+            break;
+
+        case IDEN_STEP:
+            runIdentificationStep();
+            break;
+
+        case IDEN_NONE:
+        default:
+            printf("\nrunIdentification: Error, se ingreso a un modo de identificación no válido.\n");
+            break;
+    }
+}
+
+
+
+
 /*
-void runIdentificationStep() {
+void runIdentificationRamp() {
     //Verifico si corresponde la ejecución
     if (!b_identification) return;
 
@@ -158,7 +161,7 @@ void runIdentificationStep() {
         return; 
     }
 
-    duty_global = (int32_t)duty;
+    duty_applied = (int32_t)duty;
     // Configuro el PWM correspondiente
     uint32_t raw_pwm = (uint32_t)((duty / 100.0) * 1023.0); //Recordar que el PWM es de 10 bits (0-1023) y tengo que mapear
                                                             //Si no recuerdo, ir a ver la librería ESP32_FastPWM

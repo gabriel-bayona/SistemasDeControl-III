@@ -29,29 +29,27 @@ void cmd_EnablePID() {
   encoder.clearCount();
   b_PID = true;
   b_space_states_controlled = false; // Asegurar exclusión mutua
-  b_identification = false; // Apagar identificación si estaba activa
-  b_identification2 = false; // Apagar identificación 2 si estaba activa
+  g_iden_mode = IDEN_NONE; // Asegurar que no estamos en modo identificación
   setpoint = posicion_actual; // arranque suave
   Serial.println("PID Activado.");
 }
 
 void cmd_EnableSS() {
   b_PID = false;  // Asegurar que PID está apagado
-  b_identification = false; // Apagar identificación si estaba activa
-  b_identification2 = false; // Apagar identificación 2 si estaba activa
+  g_iden_mode = IDEN_NONE; // Asegurar que no estamos en modo identificación
 
   b_space_states_controlled = true;    // Prender SS
   
-  setpoint = posicion_actual; // arranque suave
+  //setpoint = posicion_actual; // arranque suave
   Serial.println("Modo: Espacio de Estados Activado.");
 }
 
 void cmd_Stop() {
   b_PID = false;
   b_space_states_controlled = false;
-  duty_global = 0;
+  duty_applied = 0;
   // Es buena práctica asegurar que el PWM físico vaya a 0 aquí también por seguridad
-  pwm->setPWM(PWM_PIN, FRECUENCIA, 0); 
+  pwm->setPWM_Int(PWM_PIN, FRECUENCIA, duty_applied);
   Serial.println("Motor Detenido.");
 }
 
@@ -127,12 +125,10 @@ void cmd_StartIdentification(int mode) {
   encoder.clearCount();
 
   if (mode == 1) {
-    b_identification = true;
-    b_identification2 = false;
+    g_iden_mode = IDEN_RAMP;
     Serial.println("INICIO IDENTIFICACION 1 - RAMPAS");
   } else {
-    b_identification = false;
-    b_identification2 = true;
+    g_iden_mode = IDEN_STEP;
     Serial.println("INICIO IDENTIFICACION 2 - ESCALONES");
   }
   Serial.println("Time,Pos,PWM_Duty"); // Header
@@ -146,7 +142,7 @@ void cmd_ToggleLog() {
 
 void cmd_Debug() {
    Serial.printf("Modo PID: %d | Modo SS: %d |Pos: %.3f | Set: %.2f | Duty Raw: %d | Duty %%: %d\n", 
-                 b_PID, b_space_states_controlled, posicion_actual, setpoint, duty_global, (duty_global * 100 / 65535));
+                 b_PID, b_space_states_controlled, posicion_actual, setpoint, duty_applied, (duty_applied * 100 / 65535));
 }
 
 
@@ -155,6 +151,8 @@ void handleSerialMenu() {
     String inputStr = Serial.readStringUntil('\n');
     inputStr.trim(); // Eliminar espacios en el inicio y final
     
+    printf("Comando recibido: '%s'\n", inputStr.c_str());
+
     if (inputStr == "help")         printHelp();  
     else if (inputStr == "epid")    cmd_EnablePID();
     else if (inputStr == "ess")     cmd_EnableSS();
