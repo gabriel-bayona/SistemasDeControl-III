@@ -11,7 +11,8 @@
 typedef enum {
     IDEN_NONE = 0, // No en identificación
     IDEN_RAMP,     // Modo identificación por rampas
-    IDEN_STEP      // Modo identificación por escalones
+    IDEN_STEP,      // Modo identificación por escalones
+    IDEN_DEADZONE  // Modo identificación de zona muerta, en bajas tensiones el pwm ni lo mueve al motor, se usa para detectar ese rango.
 } iden_mode_t; // Tipo de modo de identificación
 
 

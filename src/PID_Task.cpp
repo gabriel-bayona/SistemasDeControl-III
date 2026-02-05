@@ -123,10 +123,27 @@ double pidClassicUpdate(PIDController *pid, double error) {
 void writeMotorOutput(double u_volts) {
     const double max_duty = 65535.0 * 0.9; // Límite de seguridad del PWM (90%)
 
-    // Saturación de tension (Simulada)
     if (u_volts > V_PID_MAX)  u_volts = V_PID_MAX;
     if (u_volts < -V_PID_MAX) u_volts = -V_PID_MAX;
 
+    // COMPENSACIÓN DE ZONA MUERTA (Deadzone Feedforward):
+    // Si la señal supera el umbral de ruido, sumamos V_DEADZONE para vencer 
+    // la fricción estática inmediatamente. Si es ruido (<0.05V), cortamos a 0 para evitar vibraciones.
+    // Este ajuste permite encontrar la zona muerta en modo identificación y compensarla de ser necesario.
+    //FUERZA LA LINEALIZACION
+    if (g_iden_mode != IDEN_DEADZONE)
+    {
+        if (u_volts > V_UMBRAL_NOISE) {
+            u_volts += V_DEADZONE; 
+        }
+        else if (u_volts < -V_UMBRAL_NOISE) {
+            u_volts -= V_DEADZONE; 
+        }
+        else {
+            u_volts = 0.0;
+        }
+    }
+    
     // Conversión de tensión a Duty Cycle (16 bits)
     long long duty = (long long)((u_volts / V_PID_MAX) * 65535.0);
 

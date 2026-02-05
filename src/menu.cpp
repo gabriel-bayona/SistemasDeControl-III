@@ -15,6 +15,7 @@ void printHelp() {
   Serial.println("  sss <k0> <kx1> <kx2> : Actualiza las ganancias del controlador por Espacio de Estados");
   Serial.println("  iden          : Inicia el modo de identificación (rampas de duty cíclicas)");
   Serial.println("  iden2         : Inicia el modo de identificación 2 (escalones de duty cíclicos)");
+  Serial.println("  iden dz     : Inicia el modo de identificación para DEADZONE, sirve para encontrar la tension mínima de arranque");
   Serial.println("  log           : Activa/Desactiva el logging de datos por serial");
   Serial.println("  renc      : Resetea el contador del encoder a 0");
   Serial.println("  debug         : Muestra estado actual del sistema");
@@ -48,6 +49,9 @@ void cmd_Stop() {
   b_PID = false;
   b_space_states_controlled = false;
   duty_applied = 0;
+  g_iden_mode = IDEN_NONE;
+  b_logging = false;
+  b_control_pot = false;
   // Es buena práctica asegurar que el PWM físico vaya a 0 aquí también por seguridad
   pwm->setPWM_Int(PWM_PIN, FRECUENCIA, duty_applied);
   Serial.println("Motor Detenido.");
@@ -127,9 +131,15 @@ void cmd_StartIdentification(int mode) {
   if (mode == 1) {
     g_iden_mode = IDEN_RAMP;
     Serial.println("INICIO IDENTIFICACION 1 - RAMPAS");
-  } else {
+  } else if (mode == 2) {
     g_iden_mode = IDEN_STEP;
     Serial.println("INICIO IDENTIFICACION 2 - ESCALONES");
+  }else if (mode == 3) {
+    g_iden_mode = IDEN_DEADZONE;
+    Serial.println("INICIO IDENTIFICACION 3 - POSIBLE ZONA MUERTA - BUSCA TENSION MINIMA DE ARRANQUE");
+  } else {
+    Serial.println("Modo de identificación inválido.");
+    return;
   }
   Serial.println("Time,Pos,PWM_Duty"); // Header
 }
@@ -170,6 +180,7 @@ void handleSerialMenu() {
     else if (inputStr.startsWith("spid"))    cmd_UpdatePID(inputStr);
     else if (inputStr.startsWith("setall"))  cmd_SetAll(inputStr);
     else if (inputStr.startsWith("sss"))     cmd_UpdateSS(inputStr);
+    else if (inputStr.startsWith("iden dz"))   cmd_StartIdentification(3);
 
     // Comando no reconocido
     else Serial.println("Comando no reconocido. Escribe 'help' para ver los comandos disponibles.");

@@ -3,9 +3,32 @@
 #include "config.h"
 #include "PID_Task.h"
 
+
+// puntos entre 5% y 25% para encontrar el arranque exacto del motor
+static const float iden3_steps[] = {
+    // Sentido Positivo
+
+    2.0, 4.0, 6.0, 8.0, 
+    10.0, 11.0, 12.0, 13.0, 14.0, 15.0, // Zona crítica típica
+    16.0, 18.0, 20.0, 22.0, 25.0,       // Confirmación arranque
+    30.0, 40.0,                         // Zona lineal
+    
+    //mismo pero en sentido negativo, me permite ver si hay asimetrías
+    -2.0, -4.0, -6.0, -8.0, 
+    -10.0, -11.0, -12.0, -13.0, -14.0, -15.0,
+    -16.0, -18.0, -20.0, -22.0, -25.0,
+    -30.0, -40.0
+};
+
+#define IDEN3_TOTAL_STEPS (sizeof(iden3_steps)/sizeof(iden3_steps[0]))
+
+
+
+
 // Funciones internas (archivo-local)
 static void runIdentificationRamp();
 static void runIdentificationStep();
+static void runIdentificationPosibleDeadZone(); 
 
 
 static void runIdentificationRamp() {
@@ -114,6 +137,9 @@ void runIdentification()
             runIdentificationStep();
             break;
 
+        case IDEN_DEADZONE:
+            runIdentificationPosibleDeadZone();
+            break;
         case IDEN_NONE:
         default:
             printf("\nrunIdentification: Error, se ingreso a un modo de identificación no válido.\n");
@@ -121,6 +147,63 @@ void runIdentification()
     }
 }
 
+
+// Genera pulsos de amplitud creciente con pausas a 0V
+void runIdentificationPosibleDeadZone(void)
+{
+    // Variables estáticas para mantener el estado entre llamadas
+    static uint32_t local_counter = 0;
+    static uint32_t step_index = 0;
+    static bool zero_phase = false; // false = aplicando tension, true = descanso (0V)
+
+    if (g_iden_mode != IDEN_DEADZONE) return;
+
+    // Si es la primera vez que entra (iden_counter es 0), reseteamos las estáticas.
+    // Esto es crucial por si se cancela y se vuelve a empezar, para que no empiece a la mitad.
+    if (iden_counter == 0) {
+        local_counter = 0;
+        step_index = 0;
+        zero_phase = false;
+    }
+
+    // Verificar fin de la prueba
+    // sizeof para mayor seguridad, o la constante definida
+    int total_steps_count = sizeof(iden3_steps) / sizeof(iden3_steps[0]);
+    
+    if (step_index >= total_steps_count) {
+        writeMotorOutput(0);
+        g_iden_mode = IDEN_NONE;
+        b_logging = false;
+        iden_counter = 0;
+        Serial.println("FIN IDENTIFICACION 3 - DEADZONE");
+        return;
+    }
+
+    if (!zero_phase) {
+        //FASE ACTIVA: Aplicar tension ---
+        double duty = iden3_steps[step_index];
+        double u = (duty / 100.0) * V_PID_MAX;
+        writeMotorOutput(u);
+
+        // Mantenemos la tension por un tiempo
+        if (++local_counter >= IDEN3_STEP_SAMPLES) {
+            local_counter = 0;
+            zero_phase = true; // Pasamos a fase de descanso
+        }
+    } else {
+        // FASE SIN EXITACION: Descanso para eliminar inercia
+        writeMotorOutput(0);
+
+        // Se mantienen 0V por un instante
+        if (++local_counter >= IDEN3_ZERO_SAMPLES) {
+            local_counter = 0;
+            zero_phase = false; // se vuelve a fase activa
+            step_index++;       // se pasa al siguiente valor de PWM
+        }
+    }
+
+    iden_counter++;
+}
 
 
 

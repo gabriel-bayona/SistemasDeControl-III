@@ -19,7 +19,7 @@
 
 
 // CONFIGURACIÓN DE TIEMPO
-#define TS_SEC        0.02  //[s] // Periodo de muestreo en segundos (modelo matemático).
+#define TS_SEC        0.01  //[s] // Periodo de muestreo en segundos (modelo matemático).
 #define TS_MS         ((uint32_t)(TS_SEC * 1000.0)) // Periodo de muestreo en milisegundos (RTOS)
 #define TS_TICKS      pdMS_TO_TICKS(TS_MS) // Periodo de muestreo en ticks de FreeRTOS
 
@@ -34,4 +34,13 @@
 #define IDEN2_MAX_DUTY_PCT     90.0
 
 
+// CONFIGURACIÓN DE IDENTIFICACIÓN 3 - Posible Zona Muerta - MAS PRECISO AL DEPENDER TODO DE TS_SEC. TIEMPOS UNIFICADOS.
+#define IDEN3_STEP_TIME_SEC  1.0  // Tiempo activo por escalón
+#define IDEN3_ZERO_TIME_SEC  0.5  // Tiempo descanso (0V)
+
+#define IDEN3_STEP_SAMPLES   ((uint32_t)(IDEN3_STEP_TIME_SEC / TS_SEC)) 
+#define IDEN3_ZERO_SAMPLES   ((uint32_t)(IDEN3_ZERO_TIME_SEC / TS_SEC))
+
+#define V_DEADZONE 1.906 // [Volts] (15.88% Duty) - Valor calculado con MathLab luego de la identificación
+#define V_UMBRAL_NOISE 0.5 // [Volts] - Umbral para considerar que el motor está en movimiento (ruido del sistema)
 #endif

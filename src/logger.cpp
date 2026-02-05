@@ -4,8 +4,9 @@
 
 
 static inline double iden_time_sec(void) {
-    return iden_counter * TS_SEC;
+    return (double)iden_counter * TS_SEC; // tiempo real en segundos
 }
+
 
 void handleLogger() {
     
@@ -24,7 +25,7 @@ void handleLogger() {
 
     if(g_iden_mode != IDEN_NONE){
         // En modo identificación, solo guardo tiempo, posición y duty
-        Serial.printf("%lu,%.4f,%.2f\n", 
+        Serial.printf("%.3f,%.4f,%.2f\n", 
                         iden_time_sec(), 
                         posicion_actual, 
                         duty_visual);
@@ -35,7 +36,7 @@ void handleLogger() {
             
         double error_visual = setpoint - posicion_actual; //Variable auxiliar para el error
             
-        Serial.printf("%lu,%.3f,%.3f,%.3f,%.2f\n", 
+        Serial.printf("%.3f,%.3f,%.3f,%.3f,%.2f\n", 
                         iden_time_sec(), 
                         setpoint, 
                         posicion_actual, 
